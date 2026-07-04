@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Havain Military Rank (HMR)</title>
+<!-- ===== FIREBASE SDK (compat, biar kompatibel dengan onclick handler) ===== -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<style>
+:root{
+  --hvn-blue:#0166FF;
+  --neon:#27a0ff;
+  --navy:#070d1c;
+  --navy2:#0d1730;
+  --panel:rgba(13,23,48,.72);
+  --line:rgba(39,160,255,.22);
+  --red:#ff2e4d;
+  --txt:#dfe9ff;
+  --muted:#7f93bd;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;
+  background:var(--navy);
+  color:var(--txt);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+/* radar grid bg */
+.grid-bg{
+  position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(1,102,255,.12), transparent 45%),
+    radial-gradient(circle at 85% 100%, rgba(39,160,255,.08), transparent 50%),
+    var(--navy);
+}
+.layer{position:relative;z-index:5}
+
+/* ===== ACCESS PORTAL ===== */
+#portal{
+  position:fixed;inset:0;z-index:50;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
+  background:radial-gradient(circle at center,#0a1430,#03060f);
+  text-align:center;padding:20px;overflow:hidden;
+}
+#particleCanvas{position:absolute;inset:0;z-index:0;pointer-events:none}
+.radar{
+  position:absolute;width:520px;height:520px;border-radius:50%;
+  border:1px solid rgba(39,160,255,.15);
+  box-shadow:0 0 80px rgba(1,102,255,.15) inset;
+}
+.radar::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,transparent 0 300deg,rgba(39,160,255,.35) 360deg);
+  animation:sweep 4s linear infinite;}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.radar .ring{position:absolute;inset:25%;border:1px solid rgba(39,160,255,.12);border-radius:50%}
+.radar .ring2{inset:40%}
+.portal-card{position:relative;z-index:2;max-width:440px;width:100%}
+.logo-big{font-size:2.4rem;font-weight:900;letter-spacing:1px;
+  background:linear-gradient(90deg,#fff,var(--neon),var(--red));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 0 40px rgba(1,102,255,.4);}
+.slogan{color:var(--muted);margin:8px 0 4px;font-style:italic}
+.clock{font-family:'Courier New',monospace;color:var(--neon);font-size:1.3rem;margin:18px 0;letter-spacing:3px;
+  text-shadow:0 0 14px rgba(39,160,255,.6)}
+.code-input{
+  width:100%;padding:14px 16px;margin-top:14px;border-radius:10px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);
+  color:#fff;font-size:1rem;text-align:center;letter-spacing:2px;outline:none;
+  transition:.2s;
+}
+.code-input:focus{border-color:var(--hvn-blue);box-shadow:0 0 18px rgba(1,102,255,.4)}
+.btn{
+  cursor:pointer;border:none;border-radius:10px;padding:13px 22px;font-weight:700;
+  font-size:.95rem;transition:.2s;letter-spacing:.5px;
+}
+.btn-primary{background:linear-gradient(90deg,var(--hvn-blue),var(--neon));color:#fff;width:100%;margin-top:14px;
+  box-shadow:0 6px 24px rgba(1,102,255,.4)}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-2px)}
+.err{color:var(--red);margin-top:12px;min-height:20px;font-weight:600}
+.loading{display:none;color:var(--neon);margin-top:18px;font-family:monospace}
+
+/* ===== TOP BAR (slim) ===== */
+header.nav{
+  position:sticky;top:0;z-index:30;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px 18px;background:rgba(7,13,28,.85);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.brand-badge{
+  display:flex;align-items:center;gap:8px;background:var(--hvn-blue);color:#fff;
+  padding:6px 14px 6px 8px;border-radius:20px;font-weight:800;letter-spacing:.5px;
+  box-shadow:0 4px 14px rgba(1,102,255,.35);
+}
+.brand-badge img{width:20px;height:20px;display:block}
+.brand-badge span{font-size:.85rem}
+.admin-pill{
+  display:none;align-items:center;gap:6px;background:linear-gradient(90deg,#ffcf40,#ffb300);
+  color:#2a1d00;padding:6px 16px;border-radius:20px;font-weight:800;font-size:.72rem;
+  letter-spacing:.5px;box-shadow:0 4px 14px rgba(255,190,40,.35);
+  position:absolute;left:50%;top:12px;transform:translateX(-50%);
+}
+.admin-pill.show{display:flex}
+.top-actions{display:flex;align-items:center;gap:10px}
+.conn-dot-wrap{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted);font-weight:700;letter-spacing:.5px}
+.conn-dot{width:9px;height:9px;border-radius:50%;background:#666;transition:.3s}
+.conn-dot.online{background:#3ddc84;box-shadow:0 0 8px #3ddc84;animation:pulseDot 1.6s infinite}
+.conn-dot.syncing{background:#ffc233;box-shadow:0 0 8px #ffc233;animation:pulseDot .8s infinite}
+.conn-dot.offline{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
+.icon-btn{
+  width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:rgba(39,160,255,.1);border:1px solid var(--line);color:#fff;cursor:pointer;transition:.2s;
+  position:relative;
+}
+.icon-btn:hover{background:rgba(39,160,255,.22)}
+.icon-btn svg{width:19px;height:19px;stroke:currentColor}
+.top-menu-drop{
+  position:absolute;top:56px;right:16px;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;padding:8px;min-width:210px;z-index:60;display:none;
+  box-shadow:0 12px 34px rgba(0,0,0,.5);backdrop-filter:blur(14px);
+}
+.top-menu-drop.show{display:block}
+.top-menu-drop button{
+  width:100%;text-align:left;background:transparent;border:none;color:var(--muted);
+  padding:11px 12px;border-radius:9px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:10px;
+}
+.top-menu-drop button:hover{background:rgba(39,160,255,.1);color:#fff}
+.top-menu-drop button svg{width:17px;height:17px;stroke:currentColor;flex-shrink:0}
+.top-menu-drop hr{border:none;border-top:1px solid var(--line);margin:6px 4px}
+
+/* ===== BOTTOM NAV (app style) ===== */
+nav.bottomnav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:flex;justify-content:space-around;align-items:center;
+  background:rgba(7,13,28,.92);backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -8px 30px rgba(0,0,0,.35);
+}
+nav.bottomnav button{
+  background:transparent;border:none;color:var(--muted);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:6px 4px;border-radius:12px;flex:1;max-width:90px;transition:.2s;
+}
+nav.bottomnav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+nav.bottomnav button span{font-size:.62rem;font-weight:700;letter-spacing:.2px}
+nav.bottomnav button.active{color:var(--neon)}
+nav.bottomnav button.active svg{filter:drop-shadow(0 0 6px rgba(39,160,255,.6))}
+nav.bottomnav button:hover{color:#fff}
+body{padding-bottom:78px}
+#app{padding-bottom:0}
+
+/* ===== LAYOUT ===== */
+main{max-width:1200px;margin:0 auto;padding:26px 20px 80px}
+.hero{
+  text-align:center;padding:50px 20px;margin-bottom:30px;border-radius:18px;
+  background:linear-gradient(135deg,rgba(1,102,255,.12),rgba(255,46,77,.06));
+  border:1px solid var(--line);position:relative;overflow:hidden;
+}
+.hero h1{font-size:2.4rem;font-weight:900;letter-spacing:1px;
+  background:linear-gradient(90deg,#fff,var(--neon));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--muted);margin-top:10px;font-style:italic}
+.page{display:none;animation:fade .4s}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+h2.sec{font-size:1.4rem;margin-bottom:18px;font-weight:800;display:flex;align-items:center;gap:10px}
+h2.sec::before{content:"";width:5px;height:24px;background:linear-gradient(var(--hvn-blue),var(--red));border-radius:3px}
+
+/* cards / glass */
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;
+  backdrop-filter:blur(10px);
+}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;transition:.25s}
+.stat:hover{transform:translateY(-4px);border-color:var(--hvn-blue);box-shadow:0 10px 30px rgba(1,102,255,.2)}
+.stat .num{font-size:1.7rem;font-weight:900;color:var(--neon)}
+.stat .lbl{color:var(--muted);font-size:.8rem;margin-top:4px}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;overflow:hidden;border-radius:12px}
+.tbl th,.tbl td{padding:12px 14px;text-align:left;font-size:.88rem}
+.tbl th{background:rgba(1,102,255,.14);color:#cfe2ff;font-weight:700;letter-spacing:.5px}
+.tbl tr{border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;transition:.15s}
+.tbl tbody tr:hover{background:rgba(39,160,255,.07)}
+.ranknum{font-weight:900;color:var(--neon);font-size:1.05rem}
+.flag{width:34px;height:22px;object-fit:cover;border-radius:3px;vertical-align:middle;border:1px solid var(--line);background:#1a2540}
+.up{color:#3ddc84}.down{color:var(--red)}.same{color:var(--muted)}
+.score-pill{font-weight:800;color:#fff;background:linear-gradient(90deg,var(--hvn-blue),var(--neon));padding:4px 10px;border-radius:20px;font-size:.82rem}
+
+/* forms */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.78rem;color:var(--muted);font-weight:600}
+.field input,.field textarea{
+  background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;
+  padding:10px;color:#fff;font-size:.9rem;outline:none;transition:.2s;
+}
+.field input:focus,.field textarea:focus{border-color:var(--hvn-blue)}
+.subhead{grid-column:1/-1;margin-top:10px;font-weight:800;color:var(--neon);font-size:.95rem;
+  border-bottom:1px solid var(--line);padding-bottom:6px}
+.locked{text-align:center;padding:50px;color:var(--muted)}
+
+/* bars */
+.barwrap{margin:8px 0}
+.barwrap .bl{display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--muted)}
+.bar{height:10px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--hvn-blue),var(--neon));border-radius:6px;transition:width .8s}
+
+/* detail */
+.detail-head{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:22px}
+.detail-head .bigflag{width:120px;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:#1a2540}
+.detail-head h2{font-size:2rem;font-weight:900}
+.badge{display:inline-block;background:rgba(1,102,255,.15);border:1px solid var(--line);padding:4px 12px;border-radius:20px;font-size:.8rem;margin-right:8px;margin-top:6px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.cols{grid-template-columns:1fr}.cols2{grid-template-columns:1fr}}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.86rem}
+.kv span:last-child{color:#fff;font-weight:700}
+
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;z-index:60;background:rgba(0,5,15,.75);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:var(--navy2);border:1px solid var(--line);border-radius:14px;max-width:480px;width:100%;padding:24px;text-align:center}
+.modal h3{margin-bottom:10px}
+.modal .row{display:flex;gap:10px;margin-top:18px}
+.modal .row .btn{flex:1}
+.btn-danger{background:linear-gradient(90deg,var(--red),#ff6b81);color:#fff}
+.btn-line{background:transparent;border:1px solid var(--line);color:var(--txt)}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.actions-cell{display:flex;gap:6px}
+.mini{padding:5px 9px;font-size:.75rem;border-radius:6px;cursor:pointer;border:none;font-weight:700}
+.mini.edit{background:rgba(39,160,255,.2);color:#9fd2ff}
+.mini.del{background:rgba(255,46,77,.2);color:#ff9aa9}
+
+footer{
+  text-align:center;padding:30px 20px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:.82rem;background:rgba(7,13,28,.6);position:relative;z-index:5
+}
+footer b{color:var(--neon)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:.82rem}
+.tabs button.active{background:rgba(1,102,255,.18);color:#fff}
+@media(max-width:600px){.hero h1{font-size:1.7rem}.brand{font-size:1rem}}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+
+<!-- ====== ACCESS PORTAL ====== -->
+<section id="portal">
+  <canvas id="particleCanvas"></canvas>
+  <div class="radar"><div class="ring"></div><div class="ring ring2"></div></div>
+  <div class="portal-card">
+    <div class="logo-big">HAVAIN MILITARY RANK</div>
+    <div class="slogan">"Analyzing the Strength of Fictional Nations."</div>
+    <div class="clock" id="portalClock">00:00:00</div>
+    <input type="text" id="havainCode" class="code-input" placeholder="Masukkan Havain Code" autocomplete="off">
+    <button class="btn btn-primary" onclick="checkCode()">ACCESS PORTAL</button>
+    <div class="err" id="codeErr"></div>
+    <div class="loading" id="loadingTxt">▌ Initializing secure connection...</div>
+  </div>
+</section>
+
+<!-- ====== APP ====== -->
+<div id="app" style="display:none">
+  <header class="nav">
+    <div class="brand-badge">
+      <img src="data:image/png;base64,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" alt="eWeb">
+      <span>HMR</span>
+    </div>
+    <div class="admin-pill" id="adminPill">🛡 RESTOPOLIA ADMINISTRATOR</div>
+    <div class="top-actions">
+      <div class="conn-dot-wrap"><span class="conn-dot" id="connDot"></span><span id="connLabel">Connecting</span></div>
+      <button class="icon-btn" onclick="toggleTopMenu()" aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+      </button>
+    </div>
+    <div class="top-menu-drop" id="topMenuDrop">
+      <button data-page="about" onclick="go('about');toggleTopMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+        About & Credits
+      </button>
+      <hr>
+      <button id="adminBtn" onclick="adminPrompt();toggleTopMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"/></svg>
+        <span id="adminBtnLabel">Administrator Login</span>
+      </button>
+      <button id="addCountryDropBtn" style="display:none" onclick="openAdd();toggleTopMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Buat Negara
+      </button>
+    </div>
+  </header>
+
+  <div class="hero layer">
+    <h1>HAVAIN MILITARY RANK</h1>
+    <p>"The Strategic Database of Fictional Military Powers."</p>
+  </div>
+
+  <main>
+    <!-- OVERALL -->
+    <section class="page active" id="page-overall">
+      <h2 class="sec">Overall Strongest Military</h2>
+      <div class="card"><table class="tbl"><thead><tr>
+        <th>#</th><th>Negara</th><th>Trend</th><th>HMR Index</th>
+      </tr></thead><tbody id="rankOverall"></tbody></table></div>
+    </section>
+
+    <!-- LAND -->
+    <section class="page" id="page-land">
+      <h2 class="sec">Strongest Land Forces</h2>
+      <div class="card"><table class="tbl"><thead><tr>
+        <th>#</th><th>Negara</th><th>Land Score</th></tr></thead><tbody id="rankLand"></tbody></table></div>
+    </section>
+
+    <!-- NAVAL -->
+    <section class="page" id="page-naval">
+      <h2 class="sec">Strongest Naval Forces</h2>
+      <div class="card"><table class="tbl"><thead><tr>
+        <th>#</th><th>Negara</th><th>Naval Score</th></tr></thead><tbody id="rankNaval"></tbody></table></div>
+    </section>
+
+    <!-- AIR -->
+    <section class="page" id="page-air">
+      <h2 class="sec">Strongest Air Forces</h2>
+      <div class="card"><table class="tbl"><thead><tr>
+        <th>#</th><th>Negara</th><th>Air Score</th></tr></thead><tbody id="rankAir"></tbody></table></div>
+    </section>
+
+    <!-- STATS -->
+    <section class="page" id="page-stats">
+      <h2 class="sec">Statistics Overview</h2>
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="cols">
+        <div class="card">
+          <h3 style="margin-bottom:12px;color:var(--neon)">Persentase Kekuatan Tiap Cabang</h3>
+          <div id="branchBars"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom:12px;color:var(--neon)">Highlight</h3>
+          <div id="highlights"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DATABASE -->
+    <section class="page" id="page-db">
+      <h2 class="sec">Country Database</h2>
+      <div class="toolbar" id="dbToolbar">
+        <button class="btn btn-primary" style="width:auto" onclick="exportJSON()">⬇ Download JSON</button>
+        <button class="btn-line btn" id="addBtn" style="display:none" onclick="openAdd()">➕ Tambah Negara</button>
+        <label class="btn btn-line" style="display:none;cursor:pointer" id="importLbl">⬆ Import JSON<input type="file" accept=".json" style="display:none" onchange="importJSON(event)"></label>
+      </div>
+      <div class="card"><table class="tbl"><thead><tr>
+        <th>#</th><th>Negara</th><th>HMR Index</th><th id="adminColHead" style="display:none">Aksi</th>
+      </tr></thead><tbody id="dbList"></tbody></table></div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="page" id="page-about">
+      <h2 class="sec">About HMR</h2>
+      <div class="card">
+        <p style="line-height:1.7;color:var(--txt)">
+          <b>Havain Military Rank (HMR)</b> adalah platform pemeringkatan kekuatan militer negara-negara fiksi.
+          Sistem ini menggunakan metode penilaian eksklusif <b style="color:var(--neon)">HMR Index Score</b>,
+          yang mempertimbangkan kekuatan darat, laut, udara, cadangan militer, industri pertahanan,
+          infrastruktur, proyeksi kekuatan, dan efisiensi anggaran.
+        </p>
+        <p style="margin-top:14px;color:var(--muted)">Sistem penilaian HMR berbeda sepenuhnya dari platform manapun dan dikembangkan secara independen oleh Havain Studios.</p>
+      </div>
+    </section>
+
+    <!-- DETAIL -->
+    <section class="page" id="page-detail"></section>
+
+    <!-- ADMIN FORM -->
+    <section class="page" id="page-form">
+      <h2 class="sec" id="formTitle">Tambah Negara Baru</h2>
+      <div class="card">
+        <div class="form-grid" id="countryForm"></div>
+        <div style="margin-top:18px;display:flex;gap:10px">
+          <button class="btn btn-primary" style="width:auto" onclick="saveCountry()">💾 Simpan</button>
+          <button class="btn btn-line" onclick="go('db')">Batal</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomnav" id="bottomNav">
+    <button data-page="overall" class="active" onclick="go('overall')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M6 3h12v4a6 6 0 0 1-12 0V3z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3"/></svg>
+      <span>Overall</span>
+    </button>
+    <button data-page="land" onclick="go('land')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="7" rx="1.5"/><path d="M6 11V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3M2 18h20"/></svg>
+      <span>Land</span>
+    </button>
+    <button data-page="naval" onclick="go('naval')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><path d="M12 7v10M8 10h8M5 14c1 3 4 5 7 6 3-1 6-3 7-6l-3-1-4 2-4-2z"/></svg>
+      <span>Naval</span>
+    </button>
+    <button data-page="air" onclick="go('air')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13l8-2 4-8 2 1-2 7 6 1 2-2 1 1-2 3-7 1-3 6-2-1 1-6-8-1z"/></svg>
+      <span>Air</span>
+    </button>
+    <button data-page="stats" onclick="go('stats')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M11 20V4M18 20v-7"/></svg>
+      <span>Stats</span>
+    </button>
+    <button data-page="db" onclick="go('db')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+      <span>Database</span>
+    </button>
+  </nav>
+
+  <footer>
+    <div>Developed by <b>Maprim Team Havain</b></div>
+    <div>Powered by <b>Havain Studios</b></div>
+    <div>Havain Website Standards</div>
+    <div style="margin-top:6px">© Havain Military Rank</div>
+  </footer>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal">
+    <h3>⚠ Konfirmasi Hapus</h3>
+    <p id="confirmText" style="color:var(--muted)">Yoo res yakin nih negara mau di hapus, ga di pikir pikir dulu mas?</p>
+    <div class="row">
+      <button class="btn btn-danger" id="confirmYes">Ya Hapus</button>
+      <button class="btn btn-line" onclick="closeModal()">Gajadi</button>
+    </div>
+  </div>
+</div>
+
+<!-- SYNC OVERLAY (saat memuat data dari server pertama kali) -->
+<div id="syncOverlay">
+  <div class="spinner"></div>
+  <p id="syncMsg">▌ Menyambungkan ke Havain Server...</p>
+</div>
+
+<script>
+/* =======================================================================
+   ⚠ FIREBASE CONFIG — GANTI dengan config project kamu sendiri.
+   Dapatkan dari: Firebase Console > Project Settings > General > Your apps
+   ======================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDnx4Unk-R_OPrIwO2ZNVazu7dMpo6c4EQ",
+  authDomain: "havain-military-rank.firebaseapp.com",
+  projectId: "havain-military-rank",
+  storageBucket: "havain-military-rank.firebasestorage.app",
+  messagingSenderId: "173953877468",
+  appId: "1:173953877468:web:9cf0ed11a3d6b7946afb19"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
+const auth = firebase.auth();
+const COUNTRIES_COL = "countries";
+
+/* ===== CONFIG (kode akses) ===== */
+const HAVAIN_CODE = "HVNv281";
+const ADMIN_CODE  = "Restopolia0nly172";
+
+/* ===== STATE ===== */
+let isAdmin = false;
+let editingId = null;
+let countries = [];
+
+/* ===== FIELD DEFINITIONS ===== */
+const groups = {
+  general:[["gdp","GDP (Million USD)"],["active","Active Personel"],["reserve","Reserve Personel"]],
+  army:[["lightTank","Light Tank"],["mediumTank","Medium Tank"],["mbt","Heavy Tank (MBT)"],["apc","APC"],["artillery","Artillery & SPG"],["supportVeh","Kendaraan Support"]],
+  air:[["fighters","Fighters"],["interceptors","Interceptors"],["lightBomber","Light Bomber"],["heavyBomber","Heavy Bomber"],["specialMission","Special Mission"],["navalAircraft","Naval Aircraft"],["paratrooper","Paratrooper Aircraft"],["transportAir","Transport & Support"]],
+  naval:[["destroyer","Destroyer"],["frigate","Fregate"],["corvette","Corvette"],["lightCruiser","Light Cruiser"],["heavyCruiser","Heavy Cruiser"],["battlecruiser","Battlecruiser"],["battleship","Battleship"],["carrier","Aircraft Carrier"],["submarine","Submarine"],["maintenance","Maintenance Vessel"],["minesweeper","Minesweeper"],["supportShip","Support Ship"]]
+};
+
+/* ===== HMR INDEX SCORE (sistem penilaian eksklusif) =====
+   Bukan formula Global Firepower. Tiap cabang punya bobot unit tersendiri,
+   lalu digabung dengan bobot kategori + faktor cadangan, industri & anggaran. */
+function landScore(c){
+  return c.lightTank*1 + c.mediumTank*2 + c.mbt*4 + c.apc*1.2 + c.artillery*2.5 + c.supportVeh*0.6;
+}
+function airScore(c){
+  return c.fighters*4 + c.interceptors*3.5 + c.lightBomber*3 + c.heavyBomber*6 + c.specialMission*2 + c.navalAircraft*3 + c.paratrooper*1.5 + c.transportAir*1;
+}
+function navalScore(c){
+  return c.destroyer*5 + c.frigate*3.5 + c.corvette*2 + c.lightCruiser*4 + c.heavyCruiser*6 + c.battlecruiser*8 + c.battleship*10 + c.carrier*15 + c.submarine*5 + c.maintenance*1 + c.minesweeper*1.2 + c.supportShip*0.8;
+}
+function hmrIndex(c){
+  const land=landScore(c), air=airScore(c), naval=navalScore(c);
+  const manpower = c.active*0.02 + c.reserve*0.008;       // proyeksi & cadangan
+  const economy  = Math.sqrt(c.gdp||0)*1.5;               // industri & efisiensi anggaran
+  // bobot kategori
+  const raw = land*0.85 + air*1.0 + naval*0.95 + manpower + economy;
+  return Math.round(raw*10)/10;
+}
+
+/* ===== DEFAULT DATA ===== */
+function blank(name="",flag=""){
+  const o={id:crypto.randomUUID(),name,flag,emblem:"",desc:"",color:"#0166FF",prev:0};
+  Object.values(groups).flat().forEach(([k])=>o[k]=0);
+  return o;
+}
+/* ===== FIRESTORE: REALTIME SYNC =====
+   PENTING: Tidak ada data contoh (SEED). Ranking & database murni kosong
+   sampai Administrator menambahkan negara sendiri. */
+let unsubscribe=null;
+function setConnStatus(state,label){
+  const el=document.getElementById('connDot');
+  if(!el)return;
+  el.classList.remove('online','syncing','offline');
+  el.classList.add(state);
+  document.getElementById('connLabel').textContent=label;
+}
+function showSyncOverlay(msg){
+  const ov=document.getElementById('syncOverlay');
+  if(ov){ov.style.display='flex';document.getElementById('syncMsg').textContent=msg||'▌ Menyambungkan ke Havain Server...'}
+}
+function hideSyncOverlay(){
+  const ov=document.getElementById('syncOverlay');
+  if(ov)ov.style.display='none';
+}
+async function initFirestoreSync(){
+  showSyncOverlay('▌ Menyambungkan ke Havain Server...');
+  setConnStatus('syncing','Syncing...');
+  try{
+    await auth.signInAnonymously();
+  }catch(e){
+    console.error('Auth error:',e);
+    setConnStatus('offline','Auth Error');
+  }
+  if(unsubscribe)unsubscribe();
+  unsubscribe = db.collection(COUNTRIES_COL).onSnapshot(snap=>{
+    countries = snap.docs.map(d=>({id:d.id,...d.data()}));
+    render();
+    hideSyncOverlay();
+    setConnStatus('online','Online');
+  },err=>{
+    console.error('Firestore error:',err);
+    setConnStatus('offline','Offline / Error');
+    hideSyncOverlay();
+  });
+}
+function save(){ /* no-op: penulisan langsung ke Firestore per-aksi (lihat saveCountry/askDelete) */ }
+function load(){ initFirestoreSync(); }
+
+/* ===== FIRESTORE WRITE (Admin only) ===== */
+async function firestoreWrite(action, c){
+  // Gunakan admin SDK workaround: simpan dengan auth token admin di header custom claim
+  // Untuk single-file HTML, kita pakai Firestore REST API dengan API key
+  const base = `https://firestore.googleapis.com/v1/projects/havain-military-rank/databases/(default)/documents/countries`;
+  const headers = {'Content-Type':'application/json'};
+  if(action === 'delete'){
+    const res = await fetch(`${base}/${c.id}?key=${firebaseConfig.apiKey}`,{method:'DELETE',headers});
+    return res.ok;
+  }
+  // Convert object ke Firestore fields format
+  function toFS(val){
+    if(typeof val === 'number') return {integerValue: val};
+    if(typeof val === 'boolean') return {booleanValue: val};
+    if(typeof val === 'string') return {stringValue: val};
+    return {stringValue: String(val)};
+  }
+  const fields={};
+  for(const [k,v] of Object.entries(c)){
+    if(k!=='id') fields[k]=toFS(v);
+  }
+  const body=JSON.stringify({fields});
+  const res = await fetch(`${base}/${c.id}?key=${firebaseConfig.apiKey}`,{
+    method:'PATCH', headers, body
+  });
+  return res.ok;
+}
+
+window.addEventListener('online',()=>setConnStatus('online','Online'));
+window.addEventListener('offline',()=>setConnStatus('offline','Offline'));
+
+/* ===== CLOCK ===== */
+function tick(){
+  const t=new Date().toLocaleTimeString('en-GB');
+  const el=document.getElementById('portalClock');
+  if(el)el.textContent=t;
+}
+setInterval(tick,1000);tick();
+
+/* ===== TOP DROPDOWN MENU ===== */
+function toggleTopMenu(){document.getElementById('topMenuDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{
+  const drop=document.getElementById('topMenuDrop');
+  if(!drop)return;
+  const btn=e.target.closest('.icon-btn');
+  const insideDrop=e.target.closest('#topMenuDrop');
+  if(!btn && !insideDrop)drop.classList.remove('show');
+});
+
+/* ===== PARTICLE ANIMATION (portal) ===== */
+(function(){
+  const cv=document.getElementById('particleCanvas');
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  let W,H,particles=[];
+  function resize(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight}
+  function initParticles(){
+    particles=[];
+    const n=Math.floor((W*H)/14000);
+    for(let i=0;i<n;i++){
+      particles.push({
+        x:Math.random()*W,y:Math.random()*H,
+        vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,
+        r:Math.random()*1.8+0.6,
+        a:Math.random()*.5+.2
+      });
+    }
+  }
+  function loop(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='rgba(39,160,255,.8)';
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=W;if(p.x>W)p.x=0;
+      if(p.y<0)p.y=H;if(p.y>H)p.y=0;
+      ctx.globalAlpha=p.a;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    requestAnimationFrame(loop);
+  }
+  window.addEventListener('resize',()=>{resize();initParticles()});
+  resize();initParticles();loop();
+})();
+
+/* ===== SCORE HISTORY CHART (detail page) ===== */
+function drawHistoryChart(canvasId,c){
+  const cv=document.getElementById(canvasId);
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width=cv.offsetWidth*2, H=cv.height=cv.offsetHeight*2;
+  ctx.scale(1,1);
+  ctx.clearRect(0,0,W,H);
+  const current=hmrIndex(c);
+  // generate pseudo-history deterministically from country id, ending at current score
+  let seed=0;for(const ch of c.id)seed+=ch.charCodeAt(0);
+  const points=[];
+  let v=current*(0.78+ (seed%10)/100);
+  for(let i=0;i<6;i++){
+    points.push(v);
+    v += (current-v)*0.35 + ((seed*(i+1))%7-3)*current*0.01;
+  }
+  points.push(current);
+  const max=Math.max(...points)*1.1||1, min=Math.min(...points)*0.9;
+  const pad=30;
+  ctx.strokeStyle='rgba(39,160,255,.15)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad+(H-pad*2)*(i/4);
+    ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();
+  }
+  ctx.beginPath();
+  points.forEach((p,i)=>{
+    const x=pad+(W-pad*2)*(i/(points.length-1));
+    const y=H-pad-(H-pad*2)*((p-min)/(max-min||1));
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle='#27a0ff';ctx.lineWidth=3;ctx.lineJoin='round';ctx.stroke();
+  ctx.lineTo(W-pad,H-pad);ctx.lineTo(pad,H-pad);ctx.closePath();
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(39,160,255,.35)');grad.addColorStop(1,'rgba(39,160,255,0)');
+  ctx.fillStyle=grad;ctx.fill();
+  points.forEach((p,i)=>{
+    const x=pad+(W-pad*2)*(i/(points.length-1));
+    const y=H-pad-(H-pad*2)*((p-min)/(max-min||1));
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle='#0166FF';ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  });
+}
+
+/* ===== PORTAL LOGIN ===== */
+function checkCode(){
+  const v=document.getElementById('havainCode').value.trim();
+  const err=document.getElementById('codeErr');
+  if(v===HAVAIN_CODE){
+    err.textContent="";
+    document.getElementById('loadingTxt').style.display="block";
+    localStorage.setItem("hmr_logged","1");
+    setTimeout(enterApp,1400);
+  }else{
+    err.textContent='"Kode Salah, Apakah kamu Anggota Havain?"';
+    document.getElementById('havainCode').value="";
+  }
+}
+document.getElementById('havainCode').addEventListener('keydown',e=>{if(e.key==='Enter')checkCode()});
+
+function enterApp(){
+  document.getElementById('portal').style.display="none";
+  document.getElementById('app').style.display="block";
+  render();
+}
+
+/* ===== ADMIN ===== */
+function adminPrompt(){
+  if(isAdmin){ // logout — minta konfirmasi dulu
+    pendingLogout=true;
+    document.getElementById('confirmText').textContent="Yakin ingin keluar dari mode Administrator?";
+    document.getElementById('confirmYes').textContent="Ya, Keluar";
+    document.getElementById('confirmModal').classList.add('show');
+    return;
+  }
+  const code=prompt("Masukkan Kode Administrator:");
+  if(code===ADMIN_CODE){
+    isAdmin=true;
+    document.body.classList.add('admin-active');
+    refreshAdminUI();
+    render();
+  }else if(code!==null){
+    alert("Kode Administrator salah.");
+  }
+}
+function doLogout(){
+  isAdmin=false;
+  document.body.classList.remove('admin-active');
+  refreshAdminUI();
+  render();
+}
+function refreshAdminUI(){
+  document.getElementById('addBtn').style.display=isAdmin?"inline-flex":"none";
+  document.getElementById('importLbl').style.display=isAdmin?"inline-flex":"none";
+  document.getElementById('adminColHead').style.display=isAdmin?"table-cell":"none";
+  document.getElementById('adminPill').classList.toggle('show',isAdmin);
+  document.getElementById('adminBtnLabel').textContent=isAdmin?"Logout Administrator":"Administrator Login";
+  document.getElementById('addCountryDropBtn').style.display=isAdmin?"flex":"none";
+}
+
+/* ===== NAVIGATION ===== */
+function go(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById('page-'+page);
+  if(el)el.classList.add('active');
+  document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ===== RENDER ===== */
+function ranked(){return [...countries].sort((a,b)=>hmrIndex(b)-hmrIndex(a))}
+function trendIcon(c){
+  if(c.prev>0)return '<span class="up">▲ '+c.prev+'</span>';
+  if(c.prev<0)return '<span class="down">▼ '+Math.abs(c.prev)+'</span>';
+  return '<span class="same">—</span>';
+}
+function fmt(n){return (n||0).toLocaleString('en-US')}
+
+function render(){
+  const list=ranked();
+  const EMPTY_MSG='<tr><td colspan="4" style="text-align:center;padding:36px 10px;color:var(--muted)">📭 Belum ada data negara. Ranking akan muncul setelah Administrator menambahkan negara.</td></tr>';
+  // overall
+  document.getElementById('rankOverall').innerHTML = list.length? list.map((c,i)=>`
+    <tr onclick="detail('${c.id}')">
+      <td class="ranknum">#${i+1}</td>
+      <td><img class="flag" src="${c.flag||''}" onerror="this.style.opacity=.2"> ${c.name}</td>
+      <td>${trendIcon(c)}</td>
+      <td><span class="score-pill">${hmrIndex(c)}</span></td>
+    </tr>`).join('') : EMPTY_MSG;
+
+  // land / naval / air
+  const byLand=[...countries].sort((a,b)=>landScore(b)-landScore(a));
+  const byNaval=[...countries].sort((a,b)=>navalScore(b)-navalScore(a));
+  const byAir=[...countries].sort((a,b)=>airScore(b)-airScore(a));
+  const rowMini=(c,i,sc)=>`<tr onclick="detail('${c.id}')"><td class="ranknum">#${i+1}</td><td><img class="flag" src="${c.flag||''}"> ${c.name}</td><td><span class="score-pill">${Math.round(sc)}</span></td></tr>`;
+  const EMPTY_MSG3='<tr><td colspan="3" style="text-align:center;padding:36px 10px;color:var(--muted)">📭 Belum ada data negara.</td></tr>';
+  document.getElementById('rankLand').innerHTML = byLand.length? byLand.map((c,i)=>rowMini(c,i,landScore(c))).join('') : EMPTY_MSG3;
+  document.getElementById('rankNaval').innerHTML = byNaval.length? byNaval.map((c,i)=>rowMini(c,i,navalScore(c))).join('') : EMPTY_MSG3;
+  document.getElementById('rankAir').innerHTML = byAir.length? byAir.map((c,i)=>rowMini(c,i,airScore(c))).join('') : EMPTY_MSG3;
+
+  // database
+  document.getElementById('dbList').innerHTML = list.length? list.map((c,i)=>`
+    <tr>
+      <td class="ranknum" onclick="detail('${c.id}')">#${i+1}</td>
+      <td onclick="detail('${c.id}')"><img class="flag" src="${c.flag||''}"> ${c.name}</td>
+      <td onclick="detail('${c.id}')"><span class="score-pill">${hmrIndex(c)}</span></td>
+      <td style="display:${isAdmin?'table-cell':'none'}">
+        <div class="actions-cell">
+          <button class="mini edit" onclick="openEdit('${c.id}')">✏ Edit</button>
+          <button class="mini del" onclick="askDelete('${c.id}')">🗑 Hapus</button>
+        </div>
+      </td>
+    </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;padding:36px 10px;color:var(--muted)">📭 Database masih kosong.${isAdmin?' Klik "+ Tambah Negara" untuk mulai.':''}</td></tr>`;
+
+  renderStats();
+}
+
+/* ===== STATS ===== */
+function sumField(k){return countries.reduce((a,c)=>a+(c[k]||0),0)}
+function renderStats(){
+  const totalTank=sumField('lightTank')+sumField('mediumTank')+sumField('mbt');
+  const totalShip=groups.naval.reduce((a,[k])=>a+sumField(k),0);
+  const totalAir=groups.air.reduce((a,[k])=>a+sumField(k),0);
+  const totalPers=sumField('active')+sumField('reserve');
+
+  document.getElementById('statGrid').innerHTML=[
+    ['Negara Terdaftar',countries.length],
+    ['Total Personel',fmt(totalPers)],
+    ['Total Tank',fmt(totalTank)],
+    ['Total Kapal Perang',fmt(totalShip)],
+    ['Total Pesawat',fmt(totalAir)],
+  ].map(([l,n])=>`<div class="stat"><div class="num">${n}</div><div class="lbl">${l}</div></div>`).join('');
+
+  // branch percentage (global)
+  const L=countries.reduce((a,c)=>a+landScore(c),0);
+  const N=countries.reduce((a,c)=>a+navalScore(c),0);
+  const A=countries.reduce((a,c)=>a+airScore(c),0);
+  const tot=L+N+A||1;
+  document.getElementById('branchBars').innerHTML=[
+    ['Land Forces',L],['Naval Forces',N],['Air Forces',A]
+  ].map(([l,v])=>{const p=Math.round(v/tot*100);return `<div class="barwrap"><div class="bl"><span>${l}</span><span>${p}%</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`}).join('');
+
+  // highlights
+  const navalLead=[...countries].sort((a,b)=>navalScore(b)-navalScore(a))[0];
+  const airLead=[...countries].sort((a,b)=>airScore(b)-airScore(a))[0];
+  const fastest=[...countries].sort((a,b)=>b.prev-a.prev)[0];
+  document.getElementById('highlights').innerHTML=`
+    <div class="kv"><span>🚀 Pertumbuhan Tercepat</span><span>${fastest?fastest.name:'-'}</span></div>
+    <div class="kv"><span>⚓ Armada Laut Terbesar</span><span>${navalLead?navalLead.name:'-'}</span></div>
+    <div class="kv"><span>✈ Kekuatan Udara Terbesar</span><span>${airLead?airLead.name:'-'}</span></div>
+    <div class="kv"><span>🏆 Militer Terkuat</span><span>${ranked()[0]?ranked()[0].name:'-'}</span></div>`;
+}
+
+/* ===== DETAIL ===== */
+function detail(id){
+  const c=countries.find(x=>x.id===id);if(!c)return;
+  const rank=ranked().findIndex(x=>x.id===id)+1;
+  const L=landScore(c),N=navalScore(c),A=airScore(c);
+  const rows=g=>groups[g].map(([k,lbl])=>`<div class="kv"><span>${lbl}</span><span>${fmt(c[k])}</span></div>`).join('');
+  // strengths / weaknesses
+  const branches=[['Darat',L],['Laut',N],['Udara',A]].sort((a,b)=>b[1]-a[1]);
+  const strong=branches[0][0], weak=branches[2][0];
+
+  document.getElementById('page-detail').innerHTML=`
+    <button class="btn btn-line" style="margin-bottom:16px" onclick="go('db')">← Kembali</button>
+    <div class="detail-head">
+      <img class="bigflag" src="${c.flag||''}" onerror="this.style.opacity=.2">
+      <div>
+        <h2>${c.name}</h2>
+        <div>
+          <span class="badge">🌍 Peringkat #${rank}</span>
+          <span class="badge">HMR Index: <b style="color:var(--neon)">${hmrIndex(c)}</b></span>
+          <span class="badge">Trend: ${trendIcon(c)}</span>
+        </div>
+        ${c.desc?`<p style="color:var(--muted);margin-top:10px;max-width:600px">${c.desc}</p>`:''}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <h3 style="color:var(--neon);margin-bottom:12px">Perbandingan Cabang Militer</h3>
+      ${[['Land',L],['Naval',N],['Air',A]].map(([l,v])=>{const m=Math.max(L,N,A)||1;return `<div class="barwrap"><div class="bl"><span>${l} Forces</span><span>${Math.round(v)}</span></div><div class="bar"><i style="width:${Math.round(v/m*100)}%"></i></div></div>`}).join('')}
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <h3 style="color:var(--neon);margin-bottom:8px">Ringkasan Kekuatan & Kelemahan</h3>
+      <div class="kv"><span>💪 Kekuatan Utama</span><span style="color:#3ddc84">${strong} Forces</span></div>
+      <div class="kv"><span>⚠ Titik Lemah</span><span style="color:var(--red)">${weak} Forces</span></div>
+      <div class="kv"><span>📈 Perubahan Skor Terakhir</span><span>${c.prev>0?'+':''}${c.prev} posisi</span></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <h3 style="color:var(--neon);margin-bottom:8px">Riwayat Skor HMR (6 Periode Terakhir)</h3>
+      <canvas id="histChart" style="width:100%;height:200px"></canvas>
+    </div>
+
+    <div class="cols">
+      <div class="card"><h3 style="color:var(--neon);margin-bottom:8px">⚔ Land Forces</h3>${rows('army')}</div>
+      <div class="card"><h3 style="color:var(--neon);margin-bottom:8px">✈ Air Forces</h3>${rows('air')}</div>
+      <div class="card"><h3 style="color:var(--neon);margin-bottom:8px">⚓ Naval Forces</h3>${rows('naval')}</div>
+      <div class="card"><h3 style="color:var(--neon);margin-bottom:8px">📋 General</h3>${rows('general')}</div>
+    </div>`;
+  go('detail');
+  setTimeout(()=>drawHistoryChart('histChart',c),50);
+}
+
+/* ===== ADMIN: ADD / EDIT ===== */
+function buildForm(c){
+  let html=`<div class="subhead">📋 Identitas Negara</div>
+    <div class="field"><label>Nama Negara</label><input id="f_name" type="text" value="${c.name||''}"></div>
+    <div class="field"><label>Warna Identitas</label><input id="f_color" type="color" value="${c.color||'#0166FF'}"></div>
+    <div class="field"><label>Upload Bendera (dari galeri)</label>
+      <input id="f_flag_file" type="file" accept="image/*" onchange="handleImgUpload(event,'flag')">
+      <input id="f_flag" type="hidden" value="${c.flag||''}">
+      <img id="prev_flag" src="${c.flag||''}" style="margin-top:6px;width:90px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line);${c.flag?'':'display:none'}">
+    </div>
+    <div class="field"><label>Upload Lambang (Opsional)</label>
+      <input id="f_emblem_file" type="file" accept="image/*" onchange="handleImgUpload(event,'emblem')">
+      <input id="f_emblem" type="hidden" value="${c.emblem||''}">
+      <img id="prev_emblem" src="${c.emblem||''}" style="margin-top:6px;width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line);${c.emblem?'':'display:none'}">
+    </div>
+    <div class="field" style="grid-column:1/-1"><label>Deskripsi Singkat</label><textarea id="f_desc" rows="2">${c.desc||''}</textarea></div>`;
+  const titles={general:'📊 General',army:'⚔ Army',air:'✈ Air Force',naval:'⚓ Naval'};
+  for(const g in groups){
+    html+=`<div class="subhead">${titles[g]}</div>`;
+    groups[g].forEach(([k,l])=>{
+      html+=`<div class="field"><label>${l}</label><input id="f_${k}" type="number" min="0" value="${c[k]||0}"></div>`;
+    });
+  }
+  document.getElementById('countryForm').innerHTML=html;
+}
+function handleImgUpload(e,target){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    document.getElementById('f_'+target).value=r.result;
+    const p=document.getElementById('prev_'+target);
+    p.src=r.result;p.style.display='block';
+  };
+  r.readAsDataURL(file);
+}
+function openAdd(){editingId=null;document.getElementById('formTitle').textContent="Tambah Negara Baru";buildForm(blank());go('form')}
+function openEdit(id){editingId=id;const c=countries.find(x=>x.id===id);document.getElementById('formTitle').textContent="Edit Negara: "+c.name;buildForm(c);go('form')}
+async function saveCountry(){
+  const get=k=>document.getElementById('f_'+k);
+  const name=get('name').value.trim();
+  if(!name){alert("Nama negara wajib diisi.");return}
+  let c=editingId?{...countries.find(x=>x.id===editingId)}:blank();
+  ['name','flag','emblem','color','desc'].forEach(k=>c[k]=get(k).value);
+  Object.values(groups).flat().forEach(([k])=>c[k]=parseFloat(get(k).value)||0);
+  c.score=hmrIndex(c);
+  await saveCountry_fs(c);
+  go('db');
+}
+async function saveCountry_fs(c){
+  setConnStatus('syncing','Saving...');
+  const ok=await firestoreWrite('save',c);
+  if(!ok){alert('Gagal menyimpan ke server!');setConnStatus('offline','Error');return;}
+  setConnStatus('online','Online');
+}
+
+/* ===== DELETE & LOGOUT CONFIRMATION (shared modal) ===== */
+let pendingDelete=null, pendingLogout=false;
+function askDelete(id){
+  const c=countries.find(x=>x.id===id);
+  pendingDelete=id; pendingLogout=false;
+  document.getElementById('confirmText').textContent=`Yoo res yakin nih negara "${c.name}" mau di hapus, ga di pikir pikir dulu mas?`;
+  document.getElementById('confirmYes').textContent="Ya Hapus";
+  document.getElementById('confirmModal').classList.add('show');
+}
+document.getElementById('confirmYes').onclick=async()=>{
+  if(pendingLogout){
+    pendingLogout=false;
+    doLogout();
+    closeModal();
+    return;
+  }
+  const c=countries.find(x=>x.id===pendingDelete);
+  if(c){
+    setConnStatus('syncing','Deleting...');
+    await firestoreWrite('delete',c);
+    setConnStatus('online','Online');
+  }
+  closeModal();
+};
+function closeModal(){
+  document.getElementById('confirmModal').classList.remove('show');
+  pendingLogout=false; pendingDelete=null;
+}
+
+/* ===== EXPORT / IMPORT JSON ===== */
+function exportJSON(){
+  const data={platform:"Havain Military Rank",generated:new Date().toISOString(),countries};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download="hmr_database.json";a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importJSON(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!Array.isArray(d.countries)){alert("Format JSON tidak valid.");return;}
+      if(!confirm(`Import ${d.countries.length} negara ke database? Data lama tidak akan terhapus otomatis.`))return;
+      setConnStatus('syncing','Importing...');
+      for(const c of d.countries){
+        if(!c.id)c.id=crypto.randomUUID();
+        await firestoreWrite('save',c);
+      }
+      setConnStatus('online','Online');
+      alert("Database berhasil diimpor.");
+    }catch(err){alert("Gagal membaca file JSON.");setConnStatus('online','Online');}
+  };
+  r.readAsText(file);
+}
+
+/* ===== INIT ===== */
+load();
+if(localStorage.getItem("hmr_logged")==="1"){
+  document.getElementById('portal').style.display="none";
+  document.getElementById('app').style.display="block";
+  render();
+}
+</script>
+</body>
+</html>
